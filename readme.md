@@ -1,5 +1,7 @@
 # qs-vite
 
+个人学习 create-vite 记录
+
 ## 坑
 
 1. types 文件，create-vite 的 package.json 中不含 types 文件，但是它的父文件中其实引入了。
@@ -174,6 +176,26 @@ filenames.forEach((file) => {
   - recursion: 递归创建，当父目录不存在时先创建父目录
   - mode: 目录权限
 
+### fs.statSync
+
+### fs.copyFileSync
+
+## path
+
+### fileURLToPath
+
+将文件路径（File URL）转换成正确的绝对路径(absolutely path URL)
+
+### path.resolve
+
+resolve(...paths: string[]): string;
+
+将路径参数拼接
+
+### path.join
+
+### path.relative
+
 ## swc 构建工具
 
 swc 是基于 Rust 的 JavaScript Compiler 编译工具
@@ -231,3 +253,34 @@ console.log(bName2);
 - exec: npm exrc 命令用来从本地或远程 npm 包中运行命令。
 
 - dlx: `downloadandexecute`的简称，这个命令会在本地创建一个临时的环境来下载指定的依赖，依赖下载完成后，它会在当前的工作目录中执行这个依赖包含的可执行二进制文件，这个临时的空间会在命令完成后被删除，所以这些操作都是一次性的。
+
+## cross-spawn
+
+Node.js 多进程模块的内容
+
+spawn 可以调用系统上的命令
+
+cross-spawn 跨平台 spawn 编写
+
+> spawn.sync(command, args)
+
+<img alt="picture 12" src="images/readme/IMG_20230316-194317113.png" />
+
+## import.meta
+
+import.meta 是一个给 JavaScript 模块暴露特定上下文的元数据属性的对象。它包含了这个模块的信息
+
+### import.meta.url
+
+<img alt="picture 14" src="images/readme/IMG_20230316-200320146.png" />
+
+## 写入模板
+
+```js
+const files = fs.readdirSync(templateDir);
+for (const file of files.filter((f) => f !== "package.json")) {
+  write(file);
+}
+```
+
+<img alt="picture 15" src="images/readme/IMG_20230316-202255628.png" />

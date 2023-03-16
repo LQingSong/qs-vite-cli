@@ -1,8 +1,10 @@
 import fs from "node:fs";
-import path from "path";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
 import prompts from "prompts";
 import minimist from "minimist";
 import { blue, cyan, green, lightGreen, lightRed, magenta, red, reset, yellow } from "kolorist";
+import spawn from "cross-spawn";
 
 // minimist 命令解析
 // 为了避免自动将项目名称参数转换为数字，您可以指定任何与选项未关联的参数应解析为字符串
@@ -183,6 +185,11 @@ const TEMPLATES = FRAMEWORKS.map((f) => (f.variants && f.variants.map((v) => v.n
 
 // 获取当前执行命令的地址
 const cwd = process.cwd();
+
+// _gitignore 重命名为 .gitignore
+const renameFiles: Record<string, string | undefined> = {
+  _gitignore: ".gitignore",
+};
 
 /**
  * 初始化，完成用户交互获取命令到创建项目模板的过程
@@ -365,13 +372,18 @@ async function init() {
   const FRAMEWORKSFlat: FrameworkVariant[] = FRAMEWORKS.flatMap((f) => f.variants);
   console.log(yellow("FRAMEWORKSFlat ====="), FRAMEWORKSFlat);
   // 确定用户选择的模板
-  const _TEMPLATE = FRAMEWORKSFlat.find((v) => (v.name = template)) ?? {};
+  const _TEMPLATE = FRAMEWORKSFlat.find((v) => v.name === template) ?? {};
   console.log(red("_TEMPLATE ===="), _TEMPLATE);
   // 需要添加类型断言, 因为 {} 中不存在customCommand,需要添加一个类型断言，告诉编译器该属性存在于_TEMPLATE对象中
   // 如果_TEMPLATE 中不存在customCommand，将被赋值为undefined
   const { customCommand } = _TEMPLATE as { customCommand?: string };
 
+  // 需要执行自定义指令，由系统(create-vite)内置的自定义指令。
+  // 比如 customCommand: "npm create vue@latest TARGET_DIR",
+  // 会在用户的环境下创建 vue@latest
   if (customCommand) {
+    console.log(cyan("====== customCommand ======"), customCommand);
+
     const fullCustommand = customCommand
       .replace(/^npm create/, `${pkgManager} create`)
       // 只有 yarn 1.x 不支持 '@veersion' create 命令
@@ -387,6 +399,113 @@ async function init() {
         // 包括 yarn 1.x 和 其它 pkgManager
         return "npm exec";
       });
+    // 获取 customCommand 里的命令和参数
+    const [command, ...args] = fullCustommand.split(" ");
+
+    // 将参数中的 TARGET_DIR 替换成 targetDir 变量
+    const replaceArgs = args.map((arg) => arg.replace("TARGET_DIR", targetDir));
+    console.log(red("======== spawn command ======="), command, replaceArgs);
+    // 调用 spawn 执行 command
+    const { status } = spawn.sync(command, replaceArgs, {
+      stdio: "inherit",
+    });
+    console.log(yellow("========== status ========="), status);
+
+    process.exit(status ?? 0);
+  }
+
+  // 搭建项目脚手架
+  console.log(`\nScaffolding project in ${root}...`);
+
+  // import.meta.url
+  console.log("import.meta ====", import.meta);
+  // 获取模板的位置
+  const templateDir = path.resolve(fileURLToPath(import.meta.url), "../..", `template-${template}`);
+  console.log(green("templateDir =================="), templateDir);
+
+  // 封装写数据的方法
+  const write = (file: string, content?: string) => {
+    // 文件路径，对 gitignore文件要重命名
+    const targetPath = path.join(root, renameFiles[file] ?? file);
+    if (content) {
+      // 将 content 写入 目标文件
+      fs.writeFileSync(targetPath, content);
+    } else {
+      copy(path.join(templateDir, file), targetPath);
+    }
+  };
+
+  // 获取模板目录下的所有文件
+  // 除 package.json 外都写入目标文件夹下 targetPath
+  const files = fs.readdirSync(templateDir);
+  for (const file of files.filter((f) => f !== "package.json")) {
+    write(file);
+  }
+
+  // 以 utf-8 读取 package.json 内容
+  // JSON.parse() 将json内容转成 json 对象
+  // "{ a: ...}" => { a: ... }
+  const pkg = JSON.parse(fs.readFileSync(path.join(templateDir, `package.json`), "utf-8"));
+  // 把 pkg.name 赋值之后，往目标目录写进 package.json
+  pkg.name = packageName || getProjectName();
+  write("package.json", JSON.stringify(pkg, null, 2));
+
+  // 对 react + swc 的进行处理
+  if (isReactSwc) {
+    setupReactSwc(root, template.endsWith("-ts"));
+  }
+
+  // 创建好了目标文件夹，脚手架搭建Done
+  const cdProjectName = path.relative(cwd, root);
+  console.log(`\nDone. Now run:\n`);
+
+  if (root !== cwd) {
+    console.log(`  cd ${cdProjectName.includes(" ") ? `"${cdProjectName}"` : cdProjectName}`);
+  }
+  // 根据用户使用的不同的包管理器提示用户接下来启动项目的指令
+  switch (pkgManager) {
+    case "yarn":
+      console.log("  yarn");
+      console.log("  yarn dev");
+      break;
+    default:
+      console.log(`  ${pkgManager} install`);
+      console.log(`  ${pkgManager} run dev`);
+      break;
+  }
+  // 换行
+  console.log();
+}
+
+function setupReactSwc(root: string, isTs: boolean) {}
+
+/**
+ * 拷贝目录
+ * @param srcDir
+ * @param destDir
+ */
+function copyDir(srcDir: string, destDir: string) {
+  //  递归创建目录
+  fs.mkdirSync(destDir, { recursive: true });
+  for (const file of fs.readdirSync(srcDir)) {
+    const srcFile = path.resolve(srcDir, file);
+    const destFile = path.resolve(destDir, file);
+    // 递归拷贝文件
+    copy(srcFile, destDir);
+  }
+}
+
+/**
+ *  拷贝文件
+ * @param src 源文件
+ * @param dest 目的地
+ */
+function copy(src: string, dest: string) {
+  const stat = fs.statSync(src);
+  if (stat.isDirectory()) {
+    copyDir(src, dest);
+  } else {
+    fs.copyFileSync(src, dest);
   }
 }
 

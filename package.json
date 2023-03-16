@@ -4,14 +4,15 @@
   "description": "",
   "main": "index.js",
   "type": "module",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node -r @babel/register src/index.ts"
-  },
-  "keywords": [],
+  "scripts": {},
+  "keywords": [
+    "cli",
+    "vite-cli"
+  ],
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@types/cross-spawn": "^6.0.2",
     "@types/minimist": "^1.2.2",
     "@types/prompts": "^2.4.3",
     "cross-spawn": "^7.0.3",
